@@ -427,7 +427,14 @@
       return;
     }
     const t = ev.teams;
-    $("#teamMeta").textContent = t.numTeams + "チーム × " + t.teamSize + "人";
+    let sizeLabel;
+    if (t.sizeMin && t.sizeMax) {
+      sizeLabel = (t.sizeMin === t.sizeMax) ? ("各" + t.sizeMin + "人")
+                                            : ("各" + t.sizeMin + "〜" + t.sizeMax + "人");
+    } else {
+      sizeLabel = "各" + t.teamSize + "人";
+    }
+    $("#teamMeta").textContent = t.numTeams + "チーム / " + sizeLabel;
 
     // バランス指標
     const totals = t.teams.map(x => x.total);

@@ -144,6 +144,15 @@ def entry_score(game, e):
     return player_score(game, e.get("tier"), e.get("division"))
 
 
+def decide_num_teams(n):
+    """人数に応じた固定チーム数。該当しなければ None (=従来の5人1チーム)。"""
+    if n >= 40:
+        return 8          # 40名以上 は 8チーム
+    if n >= 21:
+        return 4          # 21〜39名 は 4チーム
+    return None
+
+
 def generate_teams(event, options=None):
     options = options or {}
     game = event["game"]
@@ -151,94 +160,115 @@ def generate_teams(event, options=None):
     tsize = int(event.get("teamSize", 5))
     entries = [e for e in event["entries"] if e.get("active", True)]
     n = len(entries)
-    num_teams = n // tsize
 
-    result = {"teams": [], "subs": [], "numTeams": num_teams, "teamSize": tsize}
+    forced = decide_num_teams(n)
+    num_teams = forced if forced else (n // tsize)
+
+    result = {"teams": [], "subs": [], "numTeams": num_teams,
+              "teamSize": tsize, "forced": bool(forced)}
     if num_teams < 1:
-        result["error"] = "メンバーが足りません (1チーム分に満たない)"
+        result["error"] = "メンバーが足りません (最低でも1チーム分が必要です)"
         return result
 
-    # スコア付与 + 同点はシャッフルして再生成のたびに変化
+    # スコア付与 + 同点はシャッフルして再抽選のたびに変化
     pool = list(entries)
     random.shuffle(pool)
     for e in pool:
         e["_score"] = entry_score(game, e)
     pool.sort(key=lambda e: -e["_score"])
 
-    selected = pool[: num_teams * tsize]
-    subs = pool[num_teams * tsize:]
-
-    teams = []
-    for i in range(num_teams):
-        teams.append({
-            "id": i,
-            "name": team_name(i),
-            "members": [],
-            "total": 0,
-            "slots": {p[0]: None for p in cfg["positions"]} if cfg["role_required"] else None,
-        })
-
     positions = [p[0] for p in cfg["positions"]]
 
     def rnd():
         return random.random()
 
-    if cfg["role_required"]:
-        for p in selected:
+    subs = []
+
+    if forced:
+        # ===== 固定チーム数モード: 全員を均等に配分し、ランクで戦力を均衡 =====
+        base = n // num_teams
+        rem = n % num_teams
+        caps = [base + (1 if i < rem else 0) for i in range(num_teams)]
+        teams = [{"id": i, "name": team_name(i), "members": [],
+                  "total": 0, "slots": None} for i in range(num_teams)]
+        for p in pool:
             prim = p.get("primaryPos")
-            sec = p.get("secondaryPos")
-            chosen = None
-            used_pos = None
-            fit = "fill"
-            # 1) 第一希望が空いているチーム
-            cands = [t for t in teams if len(t["members"]) < tsize and prim in t["slots"] and t["slots"][prim] is None]
-            if cands:
-                chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                used_pos = prim
-                fit = "primary"
-            # 2) 第二希望
-            if chosen is None and sec:
-                cands = [t for t in teams if len(t["members"]) < tsize and sec in t["slots"] and t["slots"][sec] is None]
-                if cands:
-                    chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                    used_pos = sec
-                    fit = "secondary"
-            # 3) どこか空いている枠 (オフロール)
-            if chosen is None:
-                cands = [t for t in teams if len(t["members"]) < tsize]
-                chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                for pos in positions:
-                    if chosen["slots"][pos] is None:
-                        used_pos = pos
-                        break
-                fit = "fill"
-            chosen["slots"][used_pos] = p["id"]
+            cands = [(i, t) for i, t in enumerate(teams) if len(t["members"]) < caps[i]]
+
+            def keyf(it, prim=prim):
+                i, t = it
+                role_cnt = sum(1 for m in t["members"] if m["pos"] == prim)
+                # 戦力均衡を最優先、同点なら同ポジが少ないチーム(ロール分散)
+                return (t["total"], role_cnt, rnd())
+
+            _i, chosen = min(cands, key=keyf)
             chosen["members"].append({
-                "entryId": p["id"], "pos": used_pos, "fit": fit, "score": p["_score"],
+                "entryId": p["id"], "pos": prim or "FLEX",
+                "fit": "primary", "score": p["_score"],
             })
             chosen["total"] += p["_score"]
     else:
-        for p in selected:
-            prim = p.get("primaryPos")
-            cands = [t for t in teams if len(t["members"]) < tsize]
-
-            def keyf(t, prim=prim):
-                has_role = any(m["pos"] == prim for m in t["members"])
-                return (t["total"], 0 if not has_role else 1, rnd())
-
-            chosen = min(cands, key=keyf)
-            chosen["members"].append({
-                "entryId": p["id"], "pos": prim or "FLEX", "fit": "primary", "score": p["_score"],
+        # ===== 従来モード: 5人1チーム / ロール枠 (20名以下) =====
+        selected = pool[: num_teams * tsize]
+        subs = pool[num_teams * tsize:]
+        teams = []
+        for i in range(num_teams):
+            teams.append({
+                "id": i, "name": team_name(i), "members": [], "total": 0,
+                "slots": {p[0]: None for p in cfg["positions"]} if cfg["role_required"] else None,
             })
-            chosen["total"] += p["_score"]
+        if cfg["role_required"]:
+            for p in selected:
+                prim = p.get("primaryPos")
+                sec = p.get("secondaryPos")
+                chosen = None
+                used_pos = None
+                fit = "fill"
+                cands = [t for t in teams if len(t["members"]) < tsize and prim in t["slots"] and t["slots"][prim] is None]
+                if cands:
+                    chosen = min(cands, key=lambda t: (t["total"], rnd()))
+                    used_pos = prim
+                    fit = "primary"
+                if chosen is None and sec:
+                    cands = [t for t in teams if len(t["members"]) < tsize and sec in t["slots"] and t["slots"][sec] is None]
+                    if cands:
+                        chosen = min(cands, key=lambda t: (t["total"], rnd()))
+                        used_pos = sec
+                        fit = "secondary"
+                if chosen is None:
+                    cands = [t for t in teams if len(t["members"]) < tsize]
+                    chosen = min(cands, key=lambda t: (t["total"], rnd()))
+                    for pos in positions:
+                        if chosen["slots"][pos] is None:
+                            used_pos = pos
+                            break
+                    fit = "fill"
+                chosen["slots"][used_pos] = p["id"]
+                chosen["members"].append({
+                    "entryId": p["id"], "pos": used_pos, "fit": fit, "score": p["_score"],
+                })
+                chosen["total"] += p["_score"]
+        else:
+            for p in selected:
+                prim = p.get("primaryPos")
+                cands = [t for t in teams if len(t["members"]) < tsize]
 
-    # 平均算出 & 並び替え (ロール順 for lol)
+                def keyf(t, prim=prim):
+                    has_role = any(m["pos"] == prim for m in t["members"])
+                    return (t["total"], 0 if not has_role else 1, rnd())
+
+                chosen = min(cands, key=keyf)
+                chosen["members"].append({
+                    "entryId": p["id"], "pos": prim or "FLEX", "fit": "primary", "score": p["_score"],
+                })
+                chosen["total"] += p["_score"]
+
+    # 平均算出 & ロール順並び替え
+    order = {p: i for i, p in enumerate(positions)}
     for t in teams:
         cnt = max(1, len(t["members"]))
         t["avg"] = round(t["total"] / cnt, 1)
-        if cfg["role_required"]:
-            order = {p: i for i, p in enumerate(positions)}
-            t["members"].sort(key=lambda m: order.get(m["pos"], 99))
+        t["members"].sort(key=lambda m: order.get(m["pos"], 99))
 
     result["teams"] = teams
     result["subs"] = [{"entryId": s["id"], "score": s["_score"]} for s in subs]
@@ -248,6 +278,9 @@ def generate_teams(event, options=None):
         "min": min(totals), "max": max(totals),
         "spread": max(totals) - min(totals),
     }
+    sizes = [len(t["members"]) for t in teams]
+    result["sizeMin"] = min(sizes)
+    result["sizeMax"] = max(sizes)
     # 一時 _score を消す
     for e in entries:
         e.pop("_score", None)
