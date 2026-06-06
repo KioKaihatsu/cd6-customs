@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>主催者ダッシュボード | 即興カスタム チームメイカー</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="appbar">
+  <div class="logo"><span class="spark">⚡</span> 即興カスタム <span style="color:var(--muted);font-weight:600">チームメイカー</span></div>
+  <div class="grow"></div>
+  <span id="eventBadge" class="badge-game hidden"></span>
+  <button id="newEventBtn" class="btn sm ghost hidden">＋ 新しいイベント</button>
+</div>
+
+<div class="wrap">
+  <!-- ====== セットアップ (イベント未作成) ====== -->
+  <section id="setup" class="panel hidden" style="max-width:640px;margin:40px auto">
+    <h2>即興カスタムを始める</h2>
+    <div class="sub">ゲームを選んで「QR生成してスタート」を押すだけ。</div>
+
+    <div class="field">
+      <span class="lab">ゲーム</span>
+      <div class="seg" id="gameSeg">
+        <div class="opt lol" data-g="lol"><div class="t" style="color:var(--lol)">League of Legends</div><div class="d">5ロール固定 (TOP/JG/MID/ADC/SUP)</div></div>
+        <div class="opt valo" data-g="valo"><div class="t" style="color:var(--valo)">VALORANT</div><div class="d">ロール自由 (5人編成)</div></div>
+      </div>
+    </div>
+
+    <button id="createBtn" class="btn primary big" style="width:100%;font-size:18px;padding:18px">🎯 QR生成してスタート</button>
+
+    <details class="adv">
+      <summary>詳細設定（任意）</summary>
+      <label class="field" style="margin-top:14px">
+        <span class="lab">イベント名 <span class="muted">（空欄なら自動）</span></span>
+        <input type="text" id="evTitle" placeholder="例: 金曜よるカスタム #12">
+      </label>
+      <label class="field" style="margin-bottom:0">
+        <span class="lab">1チームの人数</span>
+        <input type="number" id="evTeamSize" value="5" min="1" max="5">
+      </label>
+    </details>
+  </section>
+
+  <!-- 既存イベント一覧 -->
+  <section id="eventList" class="hidden" style="max-width:640px;margin:18px auto"></section>
+
+  <!-- ====== ダッシュボード ====== -->
+  <main id="dash" class="hidden">
+    <!-- ステップナビ -->
+    <div class="stepnav">
+      <button class="step active" data-step="recv"><span class="n">1</span> エントリー受付</button>
+      <button class="step" data-step="teams"><span class="n">2</span> チーム分け</button>
+      <button class="step" data-step="bracket"><span class="n">3</span> トーナメント</button>
+    </div>
+
+    <!-- STEP1: 受付 -->
+    <section id="step-recv" class="step-pane">
+      <div class="grid cols2">
+        <div class="panel">
+          <h2>参加者エントリー用QRコード</h2>
+          <div class="sub">参加者にスマホで読み取ってもらってください。</div>
+
+          <div class="qr-mode" id="qrModeBar">
+            <button class="qm-opt" data-mode="public" id="qmPublic">
+              🌐 オンライン<span class="qm-hint">どの回線でもOK</span>
+            </button>
+            <button class="qm-opt" data-mode="lan" id="qmLan">
+              📶 同じWi-Fi<span class="qm-hint">LAN内のみ</span>
+            </button>
+          </div>
+          <div id="tunnelStatus" class="tunnel-status"></div>
+
+          <div class="qr-box">
+            <div id="qrcode"></div>
+            <div class="qr-url">
+              <div class="muted" style="font-size:12px">エントリーURL</div>
+              <a id="joinUrl" href="#" target="_blank"></a>
+              <button id="copyUrl" class="btn sm ghost">URLをコピー</button>
+            </div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button id="openQrFull" class="btn sm">QRを拡大表示</button>
+            <div class="spacer"></div>
+            <label class="switch">
+              <input type="checkbox" id="openToggle" checked>
+              <span class="slider"></span>
+              <span id="openLabel">受付中</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="row">
+            <h2 style="margin:0">エントリー一覧 <span id="entryCount" class="count-pill">0</span></h2>
+            <div class="spacer"></div>
+            <span class="muted" id="liveDot">● 自動更新中</span>
+          </div>
+          <div class="sub">ランク・希望ポジションがリアルタイムで反映されます。</div>
+          <div id="entryList" class="entry-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP2: チーム分け -->
+    <section id="step-teams" class="step-pane hidden">
+      <div class="panel">
+        <div class="row">
+          <div>
+            <h2 style="margin:0">自動チーム分け</h2>
+            <div class="sub" style="margin:4px 0 0">ランクと希望ポジションをもとにバランスよく振り分けます。</div>
+          </div>
+          <div class="spacer"></div>
+          <span id="teamMeta" class="muted"></span>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button id="genAll" class="btn primary">⚡ チーム分け＆トーナメント作成</button>
+          <button id="genTeams" class="btn">チーム分けのみ</button>
+          <button id="rerollTeams" class="btn" disabled>🎲 再シャッフル</button>
+          <div class="spacer"></div>
+          <span id="balanceInfo" class="balance-info"></span>
+        </div>
+      </div>
+      <div id="teamsArea" class="teams-area"></div>
+      <div id="subsArea"></div>
+    </section>
+
+    <!-- STEP3: トーナメント -->
+    <section id="step-bracket" class="step-pane hidden">
+      <div class="panel">
+        <div class="row">
+          <div>
+            <h2 style="margin:0">トーナメント表</h2>
+            <div class="sub" style="margin:4px 0 0">シングルエリミネーション。勝者をクリックで勝ち上がりが進みます。</div>
+          </div>
+          <div class="spacer"></div>
+          <label class="inline-field">
+            シード方式
+            <select id="seedingSel">
+              <option value="strength">強さ順 (バランス型)</option>
+              <option value="random">ランダム抽選</option>
+            </select>
+          </label>
+          <button id="genBracket" class="btn primary">表を作成</button>
+        </div>
+      </div>
+      <div id="champBanner" class="champ-banner hidden"></div>
+      <div id="bracketArea" class="bracket-scroll"></div>
+    </section>
+  </main>
+</div>
+
+<!-- QR 全画面モーダル -->
+<div id="qrModal" class="modal hidden">
+  <div class="modal-card">
+    <div id="qrBig"></div>
+    <h2 id="qrModalTitle" style="text-align:center"></h2>
+    <p id="qrModalUrl" class="muted" style="text-align:center;word-break:break-all"></p>
+    <button class="btn primary" style="width:100%" onclick="document.getElementById('qrModal').classList.add('hidden')">閉じる</button>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

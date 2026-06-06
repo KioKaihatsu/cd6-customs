@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: cd6-customs
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python server.py"
+    autoDeploy: true
+    envVars:
+      - key: NO_TUNNEL
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.12.7"
