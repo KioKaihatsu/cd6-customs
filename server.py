@@ -193,39 +193,49 @@ def generate_teams(event, options=None):
         })
 
     if cfg["role_required"]:
-        for p in selected:
+        role_keys = positions          # [TOP, JG, MID, ADC, SUP]
+        cap = num_teams                # 各ロールはチーム数だけ枠がある
+        SUP = "SUP"
+        # --- Step1: ロール決定 (低レートから順に希望ロールを割り当て) ---
+        role_count = {r: 0 for r in role_keys}
+        role_of = {}                   # entryId -> role
+        leftover = []
+        for p in sorted(selected, key=lambda e: e["_score"]):   # 低レート順
             prim = p.get("primaryPos")
             sec = p.get("secondaryPos")
-            chosen = None
-            used_pos = None
-            fit = "fill"
-            # 1) 第一希望が空いているチーム
-            cands = [t for t in teams if len(t["members"]) < tsize and prim in t["slots"] and t["slots"][prim] is None]
-            if cands:
+            if prim in role_count and role_count[prim] < cap:
+                role_of[p["id"]] = prim
+                role_count[prim] += 1
+            elif sec in role_count and role_count[sec] < cap:
+                role_of[p["id"]] = sec
+                role_count[sec] += 1
+            else:
+                leftover.append(p)     # 希望が埋まっていた(主に上位レート)
+        # --- 希望が通らなかった人は サポート優先で配置 (高レートから) ---
+        for p in sorted(leftover, key=lambda e: -e["_score"]):  # 高レート順
+            if role_count[SUP] < cap:
+                target = SUP
+            else:
+                target = next(r for r in role_keys if role_count[r] < cap)
+            role_of[p["id"]] = target
+            role_count[target] += 1
+        # --- Step2: チーム配分 (各ロール内で強い人を戦力の低いチームへ) ---
+        #     → 同ロールは各チーム1人ずつ = 対面。上位は上位ロールに集まり対面しやすい
+        for r in role_keys:
+            role_players = sorted(
+                [p for p in selected if role_of[p["id"]] == r],
+                key=lambda e: -e["_score"])                       # 強い順
+            for p in role_players:
+                cands = [t for t in teams if t["slots"][r] is None]
                 chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                used_pos = prim
-                fit = "primary"
-            # 2) 第二希望
-            if chosen is None and sec:
-                cands = [t for t in teams if len(t["members"]) < tsize and sec in t["slots"] and t["slots"][sec] is None]
-                if cands:
-                    chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                    used_pos = sec
-                    fit = "secondary"
-            # 3) 空いている枠 (オフロール)
-            if chosen is None:
-                cands = [t for t in teams if len(t["members"]) < tsize]
-                chosen = min(cands, key=lambda t: (t["total"], rnd()))
-                for pos in positions:
-                    if chosen["slots"][pos] is None:
-                        used_pos = pos
-                        break
-                fit = "fill"
-            chosen["slots"][used_pos] = p["id"]
-            chosen["members"].append({
-                "entryId": p["id"], "pos": used_pos, "fit": fit, "score": p["_score"],
-            })
-            chosen["total"] += p["_score"]
+                prim = p.get("primaryPos")
+                sec = p.get("secondaryPos")
+                fit = "primary" if r == prim else ("secondary" if r == sec else "fill")
+                chosen["slots"][r] = p["id"]
+                chosen["members"].append({
+                    "entryId": p["id"], "pos": r, "fit": fit, "score": p["_score"],
+                })
+                chosen["total"] += p["_score"]
     else:
         for p in selected:
             prim = p.get("primaryPos")
