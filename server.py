@@ -220,8 +220,13 @@ def generate_teams(event, options=None):
             role_of[p["id"]] = target
             role_count[target] += 1
         # --- Step2: チーム配分 (各ロール内で強い人を戦力の低いチームへ) ---
-        #     → 同ロールは各チーム1人ずつ = 対面。上位は上位ロールに集まり対面しやすい
-        for r in role_keys:
+        #     → 同ロールは各チーム1人ずつ = 対面。
+        #     戦力差の大きいロールから先に配分すると、チーム合計が均衡しやすい。
+        def role_range(r):
+            sc = [p["_score"] for p in selected if role_of[p["id"]] == r]
+            return (max(sc) - min(sc)) if sc else 0
+
+        for r in sorted(role_keys, key=role_range, reverse=True):
             role_players = sorted(
                 [p for p in selected if role_of[p["id"]] == r],
                 key=lambda e: -e["_score"])                       # 強い順
