@@ -147,8 +147,19 @@
     $("#newEventBtn").classList.remove("hidden");
 
     renderQR();
+    renderGameBanner();
     renderAll();
     startPoll();
+  }
+
+  function renderGameBanner() {
+    const b = $("#gameBanner");
+    b.className = "game-banner " + ev.game;
+    if (ev.game === "lol") {
+      b.innerHTML = "<div class='big'>LoL</div><div class='sub'>League of Legends</div>";
+    } else {
+      b.innerHTML = "<div class='big'>VALORANT</div>";
+    }
   }
 
   function startPoll() {

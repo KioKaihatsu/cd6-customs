@@ -25,6 +25,41 @@
 .stepnav .step.active { color: var(--txt); border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,255,.15); }
 .stepnav .step.active .n { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #04121e; }
 
+/* ゲーム名 大バナー (受付画面の下部) */
+.game-banner {
+  margin-top: 22px;
+  text-align: center;
+  padding: 56px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.game-banner.lol {
+  background: radial-gradient(120% 140% at 50% 0%, rgba(200,155,60,.18), rgba(17,23,40,.4) 70%);
+  border-color: rgba(200,155,60,.45);
+}
+.game-banner.valo {
+  background: radial-gradient(120% 140% at 50% 0%, rgba(255,70,85,.18), rgba(17,23,40,.4) 70%);
+  border-color: rgba(255,70,85,.45);
+}
+.game-banner .big {
+  font-weight: 900;
+  line-height: .95;
+  letter-spacing: 2px;
+  font-size: clamp(64px, 14vw, 160px);
+}
+.game-banner.lol .big { color: var(--lol); text-shadow: 0 0 50px rgba(200,155,60,.5); }
+.game-banner.valo .big { color: var(--valo); text-shadow: 0 0 50px rgba(255,70,85,.5); letter-spacing: 6px; }
+.game-banner .sub {
+  margin-top: 14px;
+  font-size: clamp(14px, 2vw, 22px);
+  letter-spacing: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
 /* QR モード切替 */
 .qr-mode { display: flex; gap: 8px; margin-bottom: 10px; }
 .qr-mode .qm-opt {
