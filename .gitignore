@@ -1,4 +1,5 @@
 # ローカル専用ファイル（クラウドには上げない）
+.deployhook
 cloudflared.exe
 data.json
 data.json.tmp
