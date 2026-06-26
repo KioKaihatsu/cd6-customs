@@ -131,6 +131,8 @@ def save_data(data):
 
 
 DATA = load_data()
+DATA.setdefault("events", {})
+DATA.setdefault("roulettes", {})
 
 
 def sid(n=8):
@@ -565,6 +567,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_file("admin.html")
         if path == "/join" or path == "/entry":
             return self._serve_file("entry.html")
+        if path == "/roulette" or path == "/roulette/":
+            return self._serve_file("roulette.html")
+        if path == "/roulette/join":
+            return self._serve_file("roulette-entry.html")
         if path == "/api/netinfo":
             return self._json({
                 "ip": SERVER_IP, "port": PORT,
@@ -577,6 +583,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(public_config())
         if path == "/api/events":
             return self.api_events_list()
+        if path == "/api/roulettes":
+            return self.api_roulettes_list()
 
         m = re.match(r"^/api/event/([\w-]+)/public$", path)
         if m:
@@ -584,6 +592,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/event/([\w-]+)$", path)
         if m:
             return self.api_event_get(m.group(1))
+        m = re.match(r"^/api/roulette/([\w-]+)/public$", path)
+        if m:
+            return self.api_roulette_public(m.group(1))
+        m = re.match(r"^/api/roulette/([\w-]+)$", path)
+        if m:
+            return self.api_roulette_get(m.group(1))
 
         if path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
@@ -621,6 +635,22 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self.api_reset(m.group(1), body)
 
+        # ---- 抽選ルーレット ----
+        if path == "/api/roulette":
+            return self.api_roulette_create(body)
+        m = re.match(r"^/api/roulette/([\w-]+)/entry$", path)
+        if m:
+            return self.api_roulette_entry(m.group(1), body)
+        m = re.match(r"^/api/roulette/([\w-]+)/settings$", path)
+        if m:
+            return self.api_roulette_settings(m.group(1), body)
+        m = re.match(r"^/api/roulette/([\w-]+)/draw$", path)
+        if m:
+            return self.api_roulette_draw(m.group(1), body)
+        m = re.match(r"^/api/roulette/([\w-]+)/reset$", path)
+        if m:
+            return self.api_roulette_reset(m.group(1), body)
+
         return self._json({"error": "not found"}, 404)
 
     def do_DELETE(self):
@@ -632,6 +662,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/event/([\w-]+)$", path)
         if m:
             return self.api_event_delete(m.group(1))
+        m = re.match(r"^/api/roulette/([\w-]+)/entry/([\w-]+)$", path)
+        if m:
+            return self.api_roulette_entry_delete(m.group(1), m.group(2))
+        m = re.match(r"^/api/roulette/([\w-]+)$", path)
+        if m:
+            return self.api_roulette_delete(m.group(1))
         return self._json({"error": "not found"}, 404)
 
     # ====== API 実装 ======
@@ -815,6 +851,128 @@ class Handler(BaseHTTPRequestHandler):
             if what in ("all", "teams"):
                 ev["teams"] = None
                 ev["bracket"] = None
+            save_data(DATA)
+        return self._json({"ok": True})
+
+    # ====== 抽選ルーレット API ======
+    def api_roulette_create(self, body):
+        rid = sid()
+        r = {
+            "id": rid,
+            "title": (body.get("title") or "").strip() or "抽選ルーレット",
+            "open": True,
+            "entries": [],
+            "winners": [],
+        }
+        with _lock:
+            DATA["roulettes"][rid] = r
+            save_data(DATA)
+        return self._json({"roulette": r})
+
+    def api_roulettes_list(self):
+        out = []
+        for r in DATA["roulettes"].values():
+            out.append({
+                "id": r["id"], "title": r["title"],
+                "count": len(r["entries"]), "winners": len(r.get("winners", [])),
+                "open": r.get("open", True),
+            })
+        return self._json({"roulettes": out})
+
+    def api_roulette_get(self, rid):
+        r = DATA["roulettes"].get(rid)
+        if not r:
+            return self._json({"error": "roulette not found"}, 404)
+        return self._json({"roulette": r})
+
+    def api_roulette_public(self, rid):
+        r = DATA["roulettes"].get(rid)
+        if not r:
+            return self._json({"error": "roulette not found"}, 404)
+        return self._json({
+            "id": r["id"], "title": r["title"],
+            "open": r.get("open", True), "count": len(r["entries"]),
+        })
+
+    def api_roulette_entry(self, rid, body):
+        with _lock:
+            r = DATA["roulettes"].get(rid)
+            if not r:
+                return self._json({"error": "roulette not found"}, 404)
+            if not r.get("open", True):
+                return self._json({"error": "エントリーは締め切られています"}, 403)
+            name = (body.get("name") or "").strip()
+            if not name:
+                return self._json({"error": "名前を入力してください"}, 400)
+            entry_id = body.get("entryId")
+            existing = None
+            if entry_id:
+                for e in r["entries"]:
+                    if e["id"] == entry_id:
+                        existing = e
+                        break
+            data = {
+                "name": name[:32],
+                "food": (body.get("food") or "").strip()[:48],
+            }
+            if existing:
+                existing.update(data)
+                entry = existing
+            else:
+                entry = {"id": sid(), **data}
+                r["entries"].append(entry)
+            save_data(DATA)
+        return self._json({"entry": entry})
+
+    def api_roulette_entry_delete(self, rid, eid):
+        with _lock:
+            r = DATA["roulettes"].get(rid)
+            if not r:
+                return self._json({"error": "roulette not found"}, 404)
+            r["entries"] = [e for e in r["entries"] if e["id"] != eid]
+            r["winners"] = [w for w in r.get("winners", []) if w != eid]
+            save_data(DATA)
+        return self._json({"ok": True})
+
+    def api_roulette_settings(self, rid, body):
+        with _lock:
+            r = DATA["roulettes"].get(rid)
+            if not r:
+                return self._json({"error": "roulette not found"}, 404)
+            if "open" in body:
+                r["open"] = bool(body["open"])
+            if body.get("title"):
+                r["title"] = str(body["title"])[:60]
+            save_data(DATA)
+        return self._json({"roulette": r})
+
+    def api_roulette_draw(self, rid, body):
+        with _lock:
+            r = DATA["roulettes"].get(rid)
+            if not r:
+                return self._json({"error": "roulette not found"}, 404)
+            exclude = bool(body.get("excludeWinners"))
+            won = set(r.get("winners", []))
+            pool = [e for e in r["entries"] if not (exclude and e["id"] in won)]
+            if not pool:
+                return self._json({"error": "抽選できる参加者がいません"}, 400)
+            winner = random.choice(pool)
+            r.setdefault("winners", []).append(winner["id"])
+            save_data(DATA)
+        return self._json({"winner": winner})
+
+    def api_roulette_reset(self, rid, body):
+        with _lock:
+            r = DATA["roulettes"].get(rid)
+            if not r:
+                return self._json({"error": "roulette not found"}, 404)
+            r["winners"] = []
+            save_data(DATA)
+        return self._json({"ok": True})
+
+    def api_roulette_delete(self, rid):
+        with _lock:
+            DATA["roulettes"].pop(rid, None)
             save_data(DATA)
         return self._json({"ok": True})
 

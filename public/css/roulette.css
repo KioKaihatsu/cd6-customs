@@ -1,0 +1,89 @@
+/* ============================================================
+   抽選ルーレット 専用スタイル
+   ============================================================ */
+
+/* エントリー一覧の行 (名前 + 好物) */
+.r-entry {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  background: #0d1322; border: 1px solid var(--line); border-radius: 11px;
+  animation: pop .25s ease;
+}
+.r-entry .num { width: 26px; height: 26px; border-radius: 50%; background: var(--panel2);
+  display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--muted); flex: 0 0 auto; }
+.r-entry .nm { font-weight: 700; }
+.r-entry .food { font-size: 12px; color: var(--gold); }
+.r-entry .won { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--gold); }
+.r-entry .del { margin-left: auto; }
+.r-entry.is-won { border-color: rgba(255,211,77,.4); background: rgba(255,211,77,.06); }
+
+/* ルーレットのリール */
+.reel-window {
+  position: relative; overflow: hidden; margin-top: 16px;
+  height: 150px; border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #0b1120, #0d1322);
+  box-shadow: inset 0 0 60px rgba(0,0,0,.4);
+}
+.reel { display: flex; height: 100%; align-items: center; }
+.reel .card {
+  flex: 0 0 200px; width: 200px; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 8px; box-sizing: border-box; text-align: center;
+  border-right: 1px solid rgba(255,255,255,.04);
+}
+.reel .card .cn { font-weight: 800; font-size: 20px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 184px; }
+.reel .card .cf { font-size: 12px; color: var(--gold); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 184px; }
+.reel .card.win .cn { color: var(--gold); text-shadow: 0 0 16px rgba(255,211,77,.6); }
+
+/* 中央のポインタ枠 */
+.reel-pointer {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 200px; transform: translateX(-50%);
+  border-left: 2px solid var(--gold); border-right: 2px solid var(--gold);
+  box-shadow: 0 0 30px rgba(255,211,77,.35); pointer-events: none; z-index: 3;
+}
+.reel-pointer::before, .reel-pointer::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  border-left: 9px solid transparent; border-right: 9px solid transparent;
+}
+.reel-pointer::before { top: -1px; border-top: 11px solid var(--gold); }
+.reel-pointer::after { bottom: -1px; border-bottom: 11px solid var(--gold); }
+.reel-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+
+/* 当選者バナー */
+.winner-banner {
+  margin: 4px 0 18px; padding: 22px; text-align: center; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255,211,77,.20), rgba(124,92,255,.16));
+  border: 1px solid rgba(255,211,77,.5);
+  animation: winpop .4s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes winpop { from { opacity: 0; transform: scale(.85); } }
+.winner-banner .label { font-size: 13px; color: var(--gold); font-weight: 800; letter-spacing: 3px; }
+.winner-banner .wname { font-size: 40px; font-weight: 900; margin: 6px 0 2px; }
+.winner-banner .wfood { font-size: 16px; color: var(--gold); }
+.winner-banner .crown { font-size: 30px; }
+
+/* 当選履歴 */
+.winners-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.winners-list:empty { display: none; }
+.win-chip { background: rgba(255,211,77,.1); border: 1px solid rgba(255,211,77,.35);
+  padding: 7px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+.win-chip .idx { color: var(--gold); margin-right: 6px; }
+.win-chip .wf { color: var(--muted); font-weight: 600; margin-left: 6px; font-size: 12px; }
+
+/* 紙吹雪 */
+.confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 250; overflow: hidden; }
+.confetti-piece { position: absolute; width: 10px; height: 14px; top: -20px; opacity: .9;
+  animation: fall linear forwards; }
+@keyframes fall {
+  to { transform: translateY(110vh) rotate(720deg); opacity: 1; }
+}
+
+/* 一覧 (セットアップの既存抽選) */
+.r-item {
+  display: flex; align-items: center; gap: 12px; padding: 13px 15px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px; margin-bottom: 9px; cursor: pointer;
+}
+.r-item:hover { border-color: var(--gold); }
+.r-item .meta { color: var(--muted); font-size: 12px; }

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>エントリー | 抽選ルーレット</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  body { padding-bottom: 40px; }
+  .entry-wrap { max-width: 540px; margin: 0 auto; padding: 14px 16px; }
+  .hero { text-align: center; padding: 28px 22px 8px; }
+  .hero .game { font-size: 13px; font-weight: 800; letter-spacing: 3px; color: var(--gold); }
+  .hero h1 { font-size: 23px; margin: 8px 0 4px; }
+  .hero .cnt { color: var(--muted); font-size: 13px; }
+  .done { text-align: center; padding: 30px 16px; }
+  .done .check {
+    width: 74px; height: 74px; border-radius: 50%; margin: 0 auto 16px;
+    background: linear-gradient(135deg, var(--gold), var(--accent2));
+    display: grid; place-items: center; font-size: 38px; color: #1a1300;
+    box-shadow: 0 0 30px rgba(255,211,77,.45);
+  }
+  .summary-card .ln { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .summary-card .ln:last-child { border: none; }
+  .summary-card .k { color: var(--muted); }
+  .summary-card .v { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="entry-wrap">
+  <div id="hero" class="hero">
+    <div class="game">🎰 LOTTERY</div>
+    <h1 id="title">抽選ルーレット</h1>
+    <div class="cnt"><span id="count">0</span> 人がエントリー済み</div>
+  </div>
+
+  <div id="closedBox" class="panel hidden" style="text-align:center">
+    <h2>エントリー受付は終了しました</h2>
+    <p class="muted">主催者にお問い合わせください。</p>
+  </div>
+
+  <form id="form" class="panel hidden">
+    <label class="field">
+      <span class="lab">お名前 <span class="req">*</span></span>
+      <input type="text" id="name" placeholder="例: しんちゃん" autocomplete="off" required>
+    </label>
+    <label class="field" style="margin-bottom:4px">
+      <span class="lab">好きな食べ物（好物） <span class="req">*</span></span>
+      <input type="text" id="food" placeholder="例: からあげ" autocomplete="off" required>
+    </label>
+    <button type="submit" class="btn primary big" style="width:100%;margin-top:16px" id="submitBtn">エントリーする</button>
+    <p class="muted" style="text-align:center;font-size:12px;margin-top:12px">
+      同じ端末からは後で内容を修正できます。
+    </p>
+  </form>
+
+  <div id="done" class="done panel hidden">
+    <div class="check">✓</div>
+    <h2>エントリー完了！</h2>
+    <p class="muted">抽選をお楽しみに！</p>
+    <div class="summary-card" id="summary"></div>
+    <button class="btn ghost" style="width:100%" id="editBtn">内容を修正する</button>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script src="/js/common.js"></script>
+<script src="/js/roulette-entry.js"></script>
+</body>
+</html>
