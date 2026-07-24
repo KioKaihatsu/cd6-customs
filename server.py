@@ -1145,6 +1145,83 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"ok": True})
 
 
+_DEMO_NAMES = ["Shin", "Kaito", "Yuki", "Ren", "Aoi", "Haru", "Sora", "Mei",
+               "Riku", "Nao", "Jun", "Emi", "Taro", "Hana", "Ken", "Mio",
+               "Yuto", "Rin", "Sho", "Aya", "Daiki", "Nana", "Goro", "Saki",
+               "Hiro", "Yui", "Kei", "Mana", "Toma", "Rio", "Gen", "Aki",
+               "Leo", "Koki", "Maki", "Tora", "Yu", "Rui", "Sena", "Kou",
+               "Ryo", "Miku", "Sota", "Ena", "Jin"]
+
+
+def _seed_lol():
+    ev = {"id": sid(), "game": "lol", "title": "LoLデモ（30名→4チーム）",
+          "teamSize": 5, "open": True, "entries": [], "teams": None, "bracket": None}
+    tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD",
+             "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
+    apex = {"MASTER", "GRANDMASTER", "CHALLENGER"}
+    pref = ["TOP", "TOP", "JG", "JG", "MID", "MID", "MID", "ADC", "ADC", "ADC", "SUP"]
+    rng = random.Random(31)
+
+    def mk(nick, tier, div, p1, p2, group=None):
+        ev["entries"].append({"id": sid(), "nickname": nick, "riotId": nick + "#JP1",
+                              "tier": tier, "division": div, "primaryPos": p1,
+                               "secondaryPos": p2, "active": True, "group": group})
+    g = sid(); mk("Trio-1", "GOLD", "2", "TOP", "JG", g); mk("Trio-2", "SILVER", "3", "MID", "ADC", g); mk("Trio-3", "BRONZE", "1", "ADC", "SUP", g)
+    g2 = sid(); mk("Duo-1", "EMERALD", "2", "JG", "TOP", g2); mk("Duo-2", "PLATINUM", "1", "SUP", "MID", g2)
+    for i in range(25):
+        t = tiers[rng.randrange(10)]
+        d = "" if t in apex else str(rng.randint(1, 4))
+        mk(_DEMO_NAMES[i], t, d, pref[rng.randrange(11)], pref[rng.randrange(11)])
+    DATA["events"][ev["id"]] = ev
+    ev["teams"] = generate_teams(ev, {})
+    ev["bracket"] = generate_bracket(ev, {"seeding": "strength"})
+
+
+def _seed_valo():
+    ev = {"id": sid(), "game": "valo", "title": "VALOデモ（45名→8チーム）",
+          "teamSize": 5, "open": True, "entries": [], "teams": None, "bracket": None}
+    tiers = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND",
+             "ASCENDANT", "IMMORTAL", "RADIANT"]
+    pos = ["DUEL", "INIT", "CTRL", "SENT", "FLEX"]
+    rng = random.Random(45)
+    for i in range(45):
+        t = tiers[rng.randrange(9)]
+        d = "" if t == "RADIANT" else str(rng.randint(1, 3))
+        ev["entries"].append({"id": sid(), "nickname": _DEMO_NAMES[i], "riotId": _DEMO_NAMES[i] + "#JP1",
+                              "tier": t, "division": d, "primaryPos": pos[rng.randrange(5)],
+                               "secondaryPos": pos[rng.randrange(5)], "active": True, "group": None})
+    DATA["events"][ev["id"]] = ev
+    ev["teams"] = generate_teams(ev, {})
+    ev["bracket"] = generate_bracket(ev, {"seeding": "strength"})
+
+
+def _seed_roulette():
+    r = {"id": sid(), "title": "景品抽選会デモ", "open": True, "entries": [], "winners": []}
+    names = ["しんちゃん", "カイト", "ユキ", "レン", "アオイ", "ハル", "ソラ",
+             "メイ", "リク", "ナオ", "ジュン", "エミ", "タロウ", "ハナ"]
+    foods = ["からあげ", "寿司", "ラーメン", "カレー", "ハンバーグ", "餃子", "たこ焼き",
+             "ケーキ", "焼肉", "うどん", "ピザ", "おにぎり", "天ぷら", "パスタ"]
+    for nm, fd in zip(names, foods):
+        r["entries"].append({"id": sid(), "name": nm, "food": fd})
+    DATA["roulettes"][r["id"]] = r
+
+
+def seed_demos():
+    """初回起動(データが空)のときデモを自動生成。デプロイでデータが消えても復活する。"""
+    if os.environ.get("NO_DEMOS") == "1":
+        return
+    if DATA.get("events") or DATA.get("roulettes"):
+        return
+    try:
+        _seed_lol()
+        _seed_valo()
+        _seed_roulette()
+        save_data(DATA)
+        print("  デモを自動生成しました (LoL / VALO / 抽選ルーレット)")
+    except Exception as e:
+        print("  [警告] デモ自動生成に失敗: %s" % e)
+
+
 def public_config():
     cfg = {}
     for g, c in RANKS.items():
@@ -1160,6 +1237,7 @@ def public_config():
 
 # --------------------------------------------------------------------------
 def main():
+    seed_demos()
     httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     url_local = "http://localhost:%d/admin" % PORT
     url_lan = "http://%s:%d" % (SERVER_IP, PORT)
