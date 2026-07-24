@@ -353,14 +353,22 @@
   function renderEntries() {
     const active = ev.entries.filter(e => e.active !== false);
     $("#entryCount").textContent = active.length;
+    const groupCount = {};
+    active.forEach(e => { if (e.group) groupCount[e.group] = (groupCount[e.group] || 0) + 1; });
+    const palette = ["#00d4ff", "#7c5cff", "#34e6a0", "#ffd34d", "#ff6b6b", "#3fd0c9", "#ff9a9a"];
+    const groupColor = {}; let gci = 0;
+    Object.keys(groupCount).forEach(g => { if (groupCount[g] >= 2) groupColor[g] = palette[gci++ % palette.length]; });
     const list = $("#entryList");
     list.innerHTML = "";
     active.forEach(e => {
       const ri = rankInfo(e);
+      const gc = e.group && groupColor[e.group];
       const row = el("div", { class: "entry-row" },
         el("span", { class: "rank-chip", style: "background:" + hexA(ri.color, .18) + ";color:" + ri.color }, ri.label),
         el("div", {},
-          el("div", { class: "name" }, e.nickname),
+          el("div", { class: "name" }, e.nickname,
+            gc ? el("span", { class: "group-tag", title: "一緒に応募したグループ",
+              style: "background:" + hexA(gc, .18) + ";color:" + gc + ";border:1px solid " + hexA(gc, .5) }, "🤝") : null),
           e.riotId ? el("div", { class: "riot" }, e.riotId) : null,
         ),
         el("div", { class: "pos-badges" },
@@ -457,6 +465,14 @@
       " pt (±" + pct + "%)</span>";
 
     const lolRole = cfg[ev.game].roleRequired;
+
+    // 複数人まとめて応募したグループを色分け表示
+    const groupCount = {};
+    ev.entries.forEach(e => { if (e.group) groupCount[e.group] = (groupCount[e.group] || 0) + 1; });
+    const palette = ["#00d4ff", "#7c5cff", "#34e6a0", "#ffd34d", "#ff6b6b", "#3fd0c9", "#ff9a9a"];
+    const groupColor = {}; let gci = 0;
+    Object.keys(groupCount).forEach(g => { if (groupCount[g] >= 2) groupColor[g] = palette[gci++ % palette.length]; });
+
     t.teams.forEach((team, ti) => {
       const card = el("div", { class: "team-card", "data-team": ti });
       const nameInput = el("input", { class: "tname", value: team.name, type: "text" });
@@ -477,13 +493,18 @@
         const fitTag = m.fit === "primary" ? null
           : el("span", { class: "tag " + (m.fit === "secondary" ? "secondary" : "fill") },
               m.fit === "secondary" ? "第2希望" : "オフロール");
+        const gc = e.group && groupColor[e.group];
+        const groupTag = gc
+          ? el("span", { class: "group-tag", title: "一緒に応募したグループ",
+              style: "background:" + hexA(gc, .18) + ";color:" + gc + ";border:1px solid " + hexA(gc, .5) }, "🤝")
+          : null;
         const row = el("div", {
           class: "member", draggable: "true",
           "data-team": ti, "data-idx": mi,
         },
           slot,
           el("div", {},
-            el("div", { class: "mname" }, e.nickname),
+            el("div", { class: "mname" }, e.nickname, groupTag),
             el("div", { class: "mrank", style: "color:" + ri.color }, ri.label),
           ),
           el("div", { class: "mright" }, fitTag, el("span", { class: "swap" }, "⠿")),

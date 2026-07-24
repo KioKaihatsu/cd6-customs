@@ -173,6 +173,19 @@ def generate_teams(event, options=None):
     for e in entries:
         e["_score"] = entry_score(game, e)
 
+    # === 複数人まとめて応募したグループが居れば、同じチームに配置するモード ===
+    group_map = {}
+    for e in entries:
+        g = e.get("group")
+        if g:
+            group_map.setdefault(g, []).append(e)
+    if any(len(v) >= 2 for v in group_map.values()):
+        res = _generate_teams_grouped(cfg, tsize, entries, num_teams, group_map)
+        res.update({"numTeams": num_teams, "teamSize": tsize})
+        for e in entries:
+            e.pop("_score", None)
+        return res
+
     # === 抽選: 出場者を無作為に選出 (あぶれた人は補欠。再シャッフルで入れ替わる) ===
     pool = list(entries)
     random.shuffle(pool)
@@ -282,6 +295,111 @@ def team_name(i):
     if i < 26:
         return "Team " + letters[i]
     return "Team " + letters[i // 26 - 1] + letters[i % 26]
+
+
+def _assign_roles_in_team(team, positions, role_required, SUP):
+    """1チーム内のメンバーにロールを割り当てる (第1希望→第2希望→空き枠, 余りは高レートからSUP)。"""
+    members = team["members"]
+    if not role_required:
+        for m in members:
+            m["pos"] = m["_e"].get("primaryPos") or "FLEX"
+            m["fit"] = "primary"
+        return
+    slots = team["slots"]
+    remaining = []
+    for m in sorted(members, key=lambda m: -m["score"]):
+        prim = m["_e"].get("primaryPos")
+        if prim in slots and slots[prim] is None:
+            slots[prim] = m["entryId"]; m["pos"] = prim; m["fit"] = "primary"
+        else:
+            remaining.append(m)
+    still = []
+    for m in remaining:
+        sec = m["_e"].get("secondaryPos")
+        if sec in slots and slots[sec] is None:
+            slots[sec] = m["entryId"]; m["pos"] = sec; m["fit"] = "secondary"
+        else:
+            still.append(m)
+    for m in sorted(still, key=lambda m: -m["score"]):
+        target = None
+        if SUP in slots and slots[SUP] is None:
+            target = SUP
+        else:
+            for p in positions:
+                if slots[p] is None:
+                    target = p
+                    break
+        if target is None:
+            target = m["_e"].get("primaryPos") or positions[0]
+        slots[target] = m["entryId"]; m["pos"] = target; m["fit"] = "fill"
+
+
+def _generate_teams_grouped(cfg, tsize, entries, num_teams, group_map):
+    """複数人グループを同じチームに保ったままチーム分けする。"""
+    positions = [p[0] for p in cfg["positions"]]
+    role_required = cfg["role_required"]
+    SUP = "SUP"
+
+    def rnd():
+        return random.random()
+
+    # ユニット化: 2人以上のグループ=1ユニット、それ以外=個人ユニット
+    units = []
+    grouped_ids = set()
+    for g, mem in group_map.items():
+        if len(mem) >= 2:
+            units.append({"members": list(mem), "size": len(mem),
+                          "total": sum(x["_score"] for x in mem)})
+            for x in mem:
+                grouped_ids.add(x["id"])
+    for e in entries:
+        if e["id"] not in grouped_ids:
+            units.append({"members": [e], "size": 1, "total": e["_score"]})
+
+    # 大きいグループから先に配置(詰めやすさ) & 同サイズは強い順(戦力均衡)。
+    # 同点はシャッフルで毎回変化。
+    random.shuffle(units)
+    units.sort(key=lambda u: (-u["size"], -u["total"]))
+
+    teams = []
+    for i in range(num_teams):
+        teams.append({
+            "id": i, "name": team_name(i), "members": [], "total": 0,
+            "slots": {p: None for p in positions} if role_required else None,
+        })
+
+    sub_entries = []
+    for u in units:
+        cands = [t for t in teams if (tsize - len(t["members"])) >= u["size"]]
+        if not cands:
+            sub_entries.extend(u["members"])   # 入りきらないグループは丸ごと補欠
+            continue
+        t = min(cands, key=lambda t: (t["total"], rnd()))
+        for e in u["members"]:
+            t["members"].append({
+                "entryId": e["id"], "pos": None, "fit": "fill",
+                "score": e["_score"], "_e": e,
+            })
+            t["total"] += e["_score"]
+
+    for t in teams:
+        _assign_roles_in_team(t, positions, role_required, SUP)
+        for m in t["members"]:
+            m.pop("_e", None)
+
+    order = {p: i for i, p in enumerate(positions)}
+    for t in teams:
+        cnt = max(1, len(t["members"]))
+        t["avg"] = round(t["total"] / cnt, 1)
+        t["members"].sort(key=lambda m: order.get(m["pos"], 99))
+
+    totals = [t["total"] for t in teams] or [0]
+    return {
+        "teams": teams,
+        "subs": [{"entryId": s["id"], "score": s["_score"]} for s in sub_entries],
+        "balance": {"min": min(totals), "max": max(totals),
+                    "spread": max(totals) - min(totals)},
+    }
 
 
 # --------------------------------------------------------------------------
@@ -769,6 +887,10 @@ class Handler(BaseHTTPRequestHandler):
                     out.append(entry)
             if not out:
                 return self._json({"error": "名前を入力してください"}, 400)
+            # 2人以上まとめて応募 → 同じグループID (チーム分けで同一チームに)
+            gid = sid() if len(out) >= 2 else None
+            for e in out:
+                e["group"] = gid
             save_data(DATA)
         return self._json({"entries": out, "entry": out[0]})
 
