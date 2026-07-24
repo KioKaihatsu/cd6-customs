@@ -389,21 +389,68 @@ def _generate_teams_grouped(cfg, tsize, entries, num_teams, group_map):
         teams.append({
             "id": i, "name": team_name(i), "members": [], "total": 0,
             "slots": {p: None for p in positions} if role_required else None,
+            "has3": False, "has2": False,
         })
 
-    sub_entries = []
-    for u in units:
-        cands = [t for t in teams if (tsize - len(t["members"])) >= u["size"]]
-        if not cands:
-            sub_entries.extend(u["members"])   # 入りきらないグループは丸ごと補欠
-            continue
-        t = min(cands, key=lambda t: (t["total"], rnd()))
+    def space(t):
+        return tsize - len(t["members"])
+
+    def can_place(t, size):
+        if space(t) < size:
+            return False
+        if size == 3 and t["has2"]:
+            return False        # 3人組と2人組は同じチームにしない
+        if size == 2 and t["has3"]:
+            return False
+        return True
+
+    def place_unit(t, u):
         for e in u["members"]:
-            t["members"].append({
-                "entryId": e["id"], "pos": None, "fit": "fill",
-                "score": e["_score"], "_e": e,
-            })
+            t["members"].append({"entryId": e["id"], "pos": None, "fit": "fill",
+                                 "score": e["_score"], "_e": e})
             t["total"] += e["_score"]
+        if u["size"] == 3:
+            t["has3"] = True
+        elif u["size"] == 2:
+            t["has2"] = True
+
+    # --- グループを崩さず配置 (3人組と2人組は同チーム不可) ---
+    leftover = []
+    for u in units:
+        cands = [t for t in teams if can_place(t, u["size"])]
+        if cands:
+            place_unit(min(cands, key=lambda t: (t["total"], rnd())), u)
+        else:
+            leftover.append(u)
+
+    sub_members = []
+    left_singles = [u for u in leftover if u["size"] == 1]
+    left_groups = [u for u in leftover if u["size"] >= 2]
+
+    # あぶれた個人は空き枠へ (入らなければ補欠)
+    for u in sorted(left_singles, key=lambda u: -u["total"]):
+        cands = [t for t in teams if space(t) >= 1]
+        if cands:
+            place_unit(min(cands, key=lambda t: (t["total"], rnd())), u)
+        else:
+            sub_members.extend(u["members"])
+
+    # まだ空き枠があり、配置できなかったグループが残る場合のみ、
+    # 致し方なくグループを分解して埋める(最後の手段)
+    if sum(space(t) for t in teams) > 0 and left_groups:
+        indivs = [m for u in left_groups for m in u["members"]]
+        for m in sorted(indivs, key=lambda m: -m["_score"]):
+            cands = [t for t in teams if space(t) >= 1]
+            if cands:
+                t = min(cands, key=lambda t: (t["total"], rnd()))
+                t["members"].append({"entryId": m["id"], "pos": None, "fit": "fill",
+                                     "score": m["_score"], "_e": m, "split": True})
+                t["total"] += m["_score"]
+            else:
+                sub_members.append(m)
+        left_groups = []
+    for u in left_groups:                 # 分解不要だったグループは丸ごと補欠
+        sub_members.extend(u["members"])
 
     for t in teams:
         _assign_roles_in_team(t, positions, role_required, SUP)
@@ -415,11 +462,12 @@ def _generate_teams_grouped(cfg, tsize, entries, num_teams, group_map):
         cnt = max(1, len(t["members"]))
         t["avg"] = round(t["total"] / cnt, 1)
         t["members"].sort(key=lambda m: order.get(m["pos"], 99))
+        t.pop("has3", None); t.pop("has2", None)
 
     totals = [t["total"] for t in teams] or [0]
     return {
         "teams": teams,
-        "subs": [{"entryId": s["id"], "score": s["_score"]} for s in sub_entries],
+        "subs": [{"entryId": s["id"], "score": s["_score"]} for s in sub_members],
         "balance": {"min": min(totals), "max": max(totals),
                     "spread": max(totals) - min(totals)},
     }

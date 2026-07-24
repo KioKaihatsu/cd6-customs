@@ -474,6 +474,12 @@
     Object.keys(groupCount).forEach(g => { if (groupCount[g] >= 2) groupColor[g] = palette[gci++ % palette.length]; });
 
     t.teams.forEach((team, ti) => {
+      // このチーム内で2人以上そろっているグループだけバッジ表示 (分解された人は除外)
+      const tgCount = {};
+      team.members.forEach(mm => {
+        const ee = entryById(mm.entryId);
+        if (ee && ee.group && !mm.split) tgCount[ee.group] = (tgCount[ee.group] || 0) + 1;
+      });
       const card = el("div", { class: "team-card", "data-team": ti });
       const nameInput = el("input", { class: "tname", value: team.name, type: "text" });
       nameInput.addEventListener("change", () => { team.name = nameInput.value; saveTeams(); });
@@ -493,7 +499,7 @@
         const fitTag = m.fit === "primary" ? null
           : el("span", { class: "tag " + (m.fit === "secondary" ? "secondary" : "fill") },
               m.fit === "secondary" ? "第2希望" : "オフロール");
-        const gc = e.group && groupColor[e.group];
+        const gc = (!m.split && e.group && tgCount[e.group] >= 2) ? groupColor[e.group] : null;
         const groupTag = gc
           ? el("span", { class: "group-tag", title: "一緒に応募したグループ",
               style: "background:" + hexA(gc, .18) + ";color:" + gc + ";border:1px solid " + hexA(gc, .5) }, "🤝")
