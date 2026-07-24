@@ -185,3 +185,20 @@ textarea { resize: vertical; min-height: 64px; }
 
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
+
+/* 複数人エントリー用ブロック */
+.person {
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 14px 4px; margin-bottom: 12px;
+  background: rgba(255,255,255,.02);
+}
+.person-head { display: flex; align-items: center; margin-bottom: 12px; }
+.person-title {
+  font-weight: 800; font-size: 13px; letter-spacing: .5px;
+  color: var(--accent); background: rgba(0,212,255,.12);
+  padding: 4px 12px; border-radius: 999px;
+}
+.person-remove { margin-left: auto; }
+.done-people { display: flex; flex-direction: column; gap: 12px; margin: 18px 0; }
+.done-person { text-align: left; }
+.done-person .dp-name { font-weight: 800; font-size: 15px; margin-bottom: 6px; }

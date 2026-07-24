@@ -44,39 +44,45 @@
   </div>
 
   <form id="form" class="panel hidden">
-    <label class="field">
-      <span class="lab">表示名 / ゲーマータグ <span class="req">*</span></span>
-      <input type="text" id="nickname" placeholder="例: しんちゃん" autocomplete="off" required>
-    </label>
-
-    <label class="field">
-      <span class="lab" id="riotLab">Riot ID</span>
-      <input type="text" id="riotId" placeholder="例: Name#TAG" autocomplete="off">
-    </label>
-
-    <div class="field">
-      <span class="lab">現在のランク <span class="req">*</span></span>
-      <div class="row">
-        <select id="tier" style="flex:2"></select>
-        <select id="division" style="flex:1"></select>
-      </div>
-    </div>
-
-    <div class="field">
-      <span class="lab">第一希望ポジション <span class="req">*</span></span>
-      <div class="pos-grid" id="primaryPos"></div>
-    </div>
-
-    <div class="field">
-      <span class="lab">第二希望ポジション <span class="muted">(任意)</span></span>
-      <div class="pos-grid" id="secondaryPos"></div>
-    </div>
-
-    <button type="submit" class="btn primary big" style="width:100%" id="submitBtn">エントリーする</button>
+    <div id="people"></div>
+    <button type="button" id="addPerson" class="btn ghost" style="width:100%">＋ 一緒にエントリーする人を追加（最大3人）</button>
+    <button type="submit" class="btn primary big" style="width:100%;margin-top:12px" id="submitBtn">エントリーする</button>
     <p class="muted" style="text-align:center;font-size:12px;margin-top:12px">
-      同じ端末からは後で内容を修正できます。
+      最大3人まで一緒にエントリーできます。同じ端末からは後で内容を修正できます。
     </p>
   </form>
+
+  <template id="personTpl">
+    <div class="person">
+      <div class="person-head">
+        <span class="person-title"></span>
+        <button type="button" class="btn sm ghost person-remove hidden">✕ 削除</button>
+      </div>
+      <label class="field">
+        <span class="lab">表示名 / ゲーマータグ <span class="req">*</span></span>
+        <input type="text" class="p-nickname" placeholder="例: しんちゃん" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="lab p-riotLab">Riot ID</span>
+        <input type="text" class="p-riotId" placeholder="例: Name#TAG" autocomplete="off">
+      </label>
+      <div class="field">
+        <span class="lab">現在のランク <span class="req">*</span></span>
+        <div class="row">
+          <select class="p-tier" style="flex:2"></select>
+          <select class="p-division" style="flex:1"></select>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lab">第一希望ポジション <span class="req">*</span></span>
+        <div class="pos-grid p-primary"></div>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <span class="lab">第二希望ポジション <span class="muted">(任意)</span></span>
+        <div class="pos-grid p-secondary"></div>
+      </div>
+    </div>
+  </template>
 
   <div id="done" class="done panel hidden">
     <div class="check">✓</div>

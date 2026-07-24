@@ -735,34 +735,42 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "event not found"}, 404)
             if not ev.get("open", True):
                 return self._json({"error": "エントリーは締め切られています"}, 403)
-            nickname = (body.get("nickname") or "").strip()
-            if not nickname:
+            members = body.get("members")
+            if not isinstance(members, list):
+                members = [body]           # 後方互換 (単体エントリー)
+            members = members[:3]          # 一度に最大3人
+            out = []
+            for m in members:
+                nickname = (m.get("nickname") or "").strip()
+                if not nickname:
+                    continue               # 空欄の人はスキップ
+                data = {
+                    "nickname": nickname[:32],
+                    "riotId": (m.get("riotId") or "").strip()[:48],
+                    "tier": m.get("tier"),
+                    "division": str(m.get("division", "")),
+                    "primaryPos": m.get("primaryPos"),
+                    "secondaryPos": m.get("secondaryPos"),
+                    "active": True,
+                }
+                mid = m.get("id") or m.get("entryId")
+                existing = None
+                if mid:
+                    for e in ev["entries"]:
+                        if e["id"] == mid:
+                            existing = e
+                            break
+                if existing:
+                    existing.update(data)
+                    out.append(existing)
+                else:
+                    entry = {"id": sid(), **data}
+                    ev["entries"].append(entry)
+                    out.append(entry)
+            if not out:
                 return self._json({"error": "名前を入力してください"}, 400)
-            entry_id = body.get("entryId")
-            existing = None
-            if entry_id:
-                for e in ev["entries"]:
-                    if e["id"] == entry_id:
-                        existing = e
-                        break
-            data = {
-                "nickname": nickname[:32],
-                "riotId": (body.get("riotId") or "").strip()[:48],
-                "tier": body.get("tier"),
-                "division": str(body.get("division", "")),
-                "primaryPos": body.get("primaryPos"),
-                "secondaryPos": body.get("secondaryPos"),
-                "note": (body.get("note") or "").strip()[:140],
-                "active": True,
-            }
-            if existing:
-                existing.update(data)
-                entry = existing
-            else:
-                entry = {"id": sid(), **data}
-                ev["entries"].append(entry)
             save_data(DATA)
-        return self._json({"entry": entry})
+        return self._json({"entries": out, "entry": out[0]})
 
     def api_entry_delete(self, eid, entry_id):
         with _lock:
@@ -901,28 +909,37 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "roulette not found"}, 404)
             if not r.get("open", True):
                 return self._json({"error": "エントリーは締め切られています"}, 403)
-            name = (body.get("name") or "").strip()
-            if not name:
+            members = body.get("members")
+            if not isinstance(members, list):
+                members = [body]           # 後方互換 (単体)
+            members = members[:3]          # 一度に最大3人
+            out = []
+            for m in members:
+                name = (m.get("name") or "").strip()
+                if not name:
+                    continue
+                data = {
+                    "name": name[:32],
+                    "food": (m.get("food") or "").strip()[:48],
+                }
+                mid = m.get("id") or m.get("entryId")
+                existing = None
+                if mid:
+                    for e in r["entries"]:
+                        if e["id"] == mid:
+                            existing = e
+                            break
+                if existing:
+                    existing.update(data)
+                    out.append(existing)
+                else:
+                    entry = {"id": sid(), **data}
+                    r["entries"].append(entry)
+                    out.append(entry)
+            if not out:
                 return self._json({"error": "名前を入力してください"}, 400)
-            entry_id = body.get("entryId")
-            existing = None
-            if entry_id:
-                for e in r["entries"]:
-                    if e["id"] == entry_id:
-                        existing = e
-                        break
-            data = {
-                "name": name[:32],
-                "food": (body.get("food") or "").strip()[:48],
-            }
-            if existing:
-                existing.update(data)
-                entry = existing
-            else:
-                entry = {"id": sid(), **data}
-                r["entries"].append(entry)
             save_data(DATA)
-        return self._json({"entry": entry})
+        return self._json({"entries": out, "entry": out[0]})
 
     def api_roulette_entry_delete(self, rid, eid):
         with _lock:

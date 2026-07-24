@@ -39,19 +39,30 @@
   </div>
 
   <form id="form" class="panel hidden">
-    <label class="field">
-      <span class="lab">お名前 <span class="req">*</span></span>
-      <input type="text" id="name" placeholder="例: しんちゃん" autocomplete="off" required>
-    </label>
-    <label class="field" style="margin-bottom:4px">
-      <span class="lab">好きな食べ物（好物） <span class="req">*</span></span>
-      <input type="text" id="food" placeholder="例: からあげ" autocomplete="off" required>
-    </label>
-    <button type="submit" class="btn primary big" style="width:100%;margin-top:16px" id="submitBtn">エントリーする</button>
+    <div id="people"></div>
+    <button type="button" id="addPerson" class="btn ghost" style="width:100%">＋ 一緒に応募する人を追加（最大3人）</button>
+    <button type="submit" class="btn primary big" style="width:100%;margin-top:12px" id="submitBtn">エントリーする</button>
     <p class="muted" style="text-align:center;font-size:12px;margin-top:12px">
-      同じ端末からは後で内容を修正できます。
+      最大3人まで一緒に応募できます。同じ端末からは後で内容を修正できます。
     </p>
   </form>
+
+  <template id="personTpl">
+    <div class="person">
+      <div class="person-head">
+        <span class="person-title"></span>
+        <button type="button" class="btn sm ghost person-remove hidden">✕ 削除</button>
+      </div>
+      <label class="field">
+        <span class="lab">お名前 <span class="req">*</span></span>
+        <input type="text" class="p-name" placeholder="例: しんちゃん" autocomplete="off">
+      </label>
+      <label class="field" style="margin-bottom:8px">
+        <span class="lab">好きな食べ物（好物） <span class="req">*</span></span>
+        <input type="text" class="p-food" placeholder="例: からあげ" autocomplete="off">
+      </label>
+    </div>
+  </template>
 
   <div id="done" class="done panel hidden">
     <div class="check">✓</div>

@@ -1,10 +1,11 @@
 // ============================================================
-//  参加者エントリーページ
+//  参加者エントリーページ (最大3人まとめてエントリー)
 // ============================================================
 (async function () {
   const params = new URLSearchParams(location.search);
   const eventId = params.get("ev");
   const storeKey = "entry:" + eventId;
+  const MAX = 3;
 
   if (!eventId) {
     $("#hero").innerHTML = "<h1>イベントIDがありません</h1><p class='muted'>主催者のQRコードから開いてください。</p>";
@@ -13,7 +14,7 @@
 
   let pub, cfg, gameCfg;
   try {
-    pub = (await api("GET", "/api/event/" + eventId + "/public"));
+    pub = await api("GET", "/api/event/" + eventId + "/public");
     cfg = await getConfig();
   } catch (e) {
     $("#hero").innerHTML = "<h1>イベントが見つかりません</h1><p class='muted'>" + escapeHtml(e.message) + "</p>";
@@ -21,112 +22,144 @@
   }
   gameCfg = cfg[pub.game];
 
-  // ヘッダー
   document.body.classList.add(pub.game);
   $("#gameLabel").textContent = gameCfg.label;
   $("#gameLabel").style.color = pub.game === "lol" ? "var(--lol)" : "var(--valo)";
   $("#title").textContent = pub.title;
   $("#count").textContent = pub.count;
-  $("#riotLab").textContent = pub.game === "lol" ? "Riot ID (サモナー名#タグ)" : "Riot ID (例: Name#TAG)";
+  if (!pub.open) { $("#closedBox").classList.remove("hidden"); return; }
 
-  if (!pub.open) {
-    $("#closedBox").classList.remove("hidden");
-    return;
+  const labelMap = pub.game === "lol" ? { "4": "IV", "3": "III", "2": "II", "1": "I" } : null;
+  const divLabel = (d) => (labelMap ? labelMap[d] : d);
+  const tierObj = (key) => gameCfg.tiers.find(x => x.key === key);
+
+  const box = $("#people");
+  const tpl = $("#personTpl");
+  let blocks = [];
+
+  function renumber() {
+    blocks.forEach((b, i) => {
+      b.querySelector(".person-title").textContent = (i + 1) + "人目";
+      b.querySelector(".person-remove").classList.toggle("hidden", blocks.length <= 1);
+    });
   }
+  function updateAdd() { $("#addPerson").classList.toggle("hidden", blocks.length >= MAX); }
 
-  // ティア & ディビジョン
-  const tierSel = $("#tier");
-  tierSel.append(el("option", { value: "" }, "ティアを選択"));
-  // 高い順に表示
-  [...gameCfg.tiers].reverse().forEach(t => tierSel.append(el("option", { value: t.key }, t.label)));
-  const divSel = $("#division");
-
-  function refreshDivisions() {
-    const tk = tierSel.value;
-    const t = gameCfg.tiers.find(x => x.key === tk);
-    divSel.innerHTML = "";
-    if (!tk || (t && t.apex)) {
-      divSel.append(el("option", { value: "" }, "—"));
-      divSel.disabled = true;
-      return;
-    }
-    divSel.disabled = false;
-    // LoL は IV..I, VALO は 1..3 表示
-    const divs = gameCfg.divisions;
-    const labelMap = pub.game === "lol" ? { "4": "IV", "3": "III", "2": "II", "1": "I" } : null;
-    divs.forEach(d => divSel.append(el("option", { value: d }, labelMap ? labelMap[d] : d)));
-  }
-  tierSel.addEventListener("change", refreshDivisions);
-  refreshDivisions();
-
-  // ポジション選択
-  let prim = null, sec = null;
-  function buildPos(container, mode) {
+  function buildPos(node, container, mode) {
     container.innerHTML = "";
     gameCfg.positions.forEach(p => {
-      const node = el("div", { class: "pos", "data-k": p.key }, p.label);
-      node.addEventListener("click", () => {
+      const pill = el("div", { class: "pos", "data-k": p.key }, p.label);
+      pill.addEventListener("click", () => {
         if (mode === "prim") {
-          prim = (prim === p.key) ? null : p.key;
-          if (sec === prim) sec = null;
+          node._prim = (node._prim === p.key) ? null : p.key;
+          if (node._sec === node._prim) node._sec = null;
         } else {
-          sec = (sec === p.key) ? null : p.key;
-          if (prim === sec) prim = null;
+          node._sec = (node._sec === p.key) ? null : p.key;
+          if (node._prim === node._sec) node._prim = null;
         }
-        renderPos();
+        renderPos(node);
       });
-      container.append(node);
+      container.append(pill);
     });
   }
-  function renderPos() {
-    $$("#primaryPos .pos").forEach(n => n.classList.toggle("sel", n.dataset.k === prim));
-    $$("#secondaryPos .pos").forEach(n => {
-      n.classList.toggle("sel2", n.dataset.k === sec);
-      n.style.opacity = (n.dataset.k === prim) ? ".35" : "1";
+  function renderPos(node) {
+    node.querySelectorAll(".p-primary .pos").forEach(n => n.classList.toggle("sel", n.dataset.k === node._prim));
+    node.querySelectorAll(".p-secondary .pos").forEach(n => {
+      n.classList.toggle("sel2", n.dataset.k === node._sec);
+      n.style.opacity = (n.dataset.k === node._prim) ? ".35" : "1";
     });
   }
-  buildPos($("#primaryPos"), "prim");
-  buildPos($("#secondaryPos"), "sec");
-  renderPos();
 
-  // 既存エントリーの復元
+  function makeBlock(data) {
+    if (blocks.length >= MAX) return;
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    node._id = (data && data.id) || null;
+    node._prim = (data && data.primaryPos) || null;
+    node._sec = (data && data.secondaryPos) || null;
+
+    node.querySelector(".p-riotLab").textContent = pub.game === "lol" ? "Riot ID (サモナー名#タグ)" : "Riot ID (例: Name#TAG)";
+
+    const tierSel = node.querySelector(".p-tier");
+    tierSel.append(new Option("ティアを選択", ""));
+    [...gameCfg.tiers].reverse().forEach(t => tierSel.append(new Option(t.label, t.key)));
+    const divSel = node.querySelector(".p-division");
+    function refreshDiv() {
+      const t = tierObj(tierSel.value);
+      divSel.innerHTML = "";
+      if (!tierSel.value || (t && t.apex)) { divSel.append(new Option("—", "")); divSel.disabled = true; return; }
+      divSel.disabled = false;
+      gameCfg.divisions.forEach(d => divSel.append(new Option(divLabel(d), d)));
+    }
+    tierSel.addEventListener("change", refreshDiv);
+    refreshDiv();
+
+    buildPos(node, node.querySelector(".p-primary"), "prim");
+    buildPos(node, node.querySelector(".p-secondary"), "sec");
+
+    node.querySelector(".person-remove").addEventListener("click", () => {
+      blocks = blocks.filter(b => b !== node);
+      node.remove(); renumber(); updateAdd();
+    });
+
+    if (data) {
+      node.querySelector(".p-nickname").value = data.nickname || "";
+      node.querySelector(".p-riotId").value = data.riotId || "";
+      tierSel.value = data.tier || ""; refreshDiv(); divSel.value = data.division || "";
+    }
+
+    box.append(node);
+    blocks.push(node);
+    renderPos(node);
+    renumber(); updateAdd();
+    return node;
+  }
+
   const saved = JSON.parse(localStorage.getItem(storeKey) || "null");
-  if (saved) {
-    $("#nickname").value = saved.nickname || "";
-    $("#riotId").value = saved.riotId || "";
-    tierSel.value = saved.tier || ""; refreshDivisions();
-    divSel.value = saved.division || "";
-    prim = saved.primaryPos || null; sec = saved.secondaryPos || null;
-    renderPos();
+  if (saved && saved.length) {
+    saved.forEach(m => makeBlock(m));
     showDone(saved);
   } else {
+    makeBlock();
     $("#form").classList.remove("hidden");
   }
 
-  // 送信
+  $("#addPerson").addEventListener("click", () => makeBlock());
+
   $("#form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const nickname = $("#nickname").value.trim();
-    if (!nickname) return toast("表示名を入力してください", "err");
-    if (!tierSel.value) return toast("ランクを選択してください", "err");
-    const t = gameCfg.tiers.find(x => x.key === tierSel.value);
-    if (!t.apex && !divSel.value) return toast("ディビジョンを選択してください", "err");
-    if (!prim) return toast("第一希望ポジションを選んでください", "err");
+    const members = [];
+    for (const node of blocks) {
+      const nickname = node.querySelector(".p-nickname").value.trim();
+      const tierSel = node.querySelector(".p-tier");
+      const divSel = node.querySelector(".p-division");
+      const anyFilled = nickname || tierSel.value || node._prim;
+      if (!anyFilled) continue;               // 空の枠はスキップ
+      if (!nickname) return toast("表示名を入力してください", "err");
+      if (!tierSel.value) return toast("「" + nickname + "」さんのランクを選択してください", "err");
+      const t = tierObj(tierSel.value);
+      if (!t.apex && !divSel.value) return toast("「" + nickname + "」さんのディビジョンを選択してください", "err");
+      if (!node._prim) return toast("「" + nickname + "」さんの第一希望ポジションを選んでください", "err");
+      members.push({
+        id: node._id || undefined,
+        nickname, riotId: node.querySelector(".p-riotId").value.trim(),
+        tier: tierSel.value, division: t.apex ? "" : divSel.value,
+        primaryPos: node._prim, secondaryPos: node._sec,
+      });
+    }
+    if (!members.length) return toast("表示名を入力してください", "err");
 
-    const payload = {
-      entryId: saved ? saved.id : undefined,
-      nickname, riotId: $("#riotId").value.trim(),
-      tier: tierSel.value, division: t.apex ? "" : divSel.value,
-      primaryPos: prim, secondaryPos: sec,
-    };
     const btn = $("#submitBtn");
     btn.disabled = true; btn.textContent = "送信中...";
     try {
-      const res = await api("POST", "/api/event/" + eventId + "/entry", payload);
-      const rec = { id: res.entry.id, ...payload };
-      localStorage.setItem(storeKey, JSON.stringify(rec));
-      showDone(rec);
-      toast("エントリーが完了しました！", "ok");
+      const res = await api("POST", "/api/event/" + eventId + "/entry", { members });
+      const recs = res.entries.map(e => ({
+        id: e.id, nickname: e.nickname, riotId: e.riotId,
+        tier: e.tier, division: e.division, primaryPos: e.primaryPos, secondaryPos: e.secondaryPos,
+      }));
+      localStorage.setItem(storeKey, JSON.stringify(recs));
+      blocks.forEach((node, i) => { if (recs[i]) node._id = recs[i].id; });
+      showDone(recs);
+      toast(recs.length + "人のエントリーが完了しました！", "ok");
     } catch (e) {
       toast(e.message, "err");
     } finally {
@@ -140,27 +173,24 @@
     $("#submitBtn").textContent = "更新する";
   });
 
-  function labelOf(list, key) {
-    const x = list.find(i => i.key === key);
-    return x ? x.label : "—";
+  function labelOf(list, key) { const x = list.find(i => i.key === key); return x ? x.label : "—"; }
+  function line(k, v) {
+    return el("div", { class: "ln", style: "display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)" },
+      el("span", { class: "muted" }, k), el("span", { style: "font-weight:700" }, v));
   }
-  function showDone(rec) {
+  function showDone(recs) {
     $("#form").classList.add("hidden");
-    const tierLabel = labelOf(gameCfg.tiers, rec.tier);
-    const t = gameCfg.tiers.find(x => x.key === rec.tier);
-    let divLabel = "";
-    if (t && !t.apex && rec.division) {
-      divLabel = pub.game === "lol" ? ({ "4": " IV", "3": " III", "2": " II", "1": " I" }[rec.division] || "") : (" " + rec.division);
-    }
-    const s = $("#summary");
-    s.className = "summary-card panel";
-    s.innerHTML = "";
-    const add = (k, v) => s.append(el("div", { class: "ln" }, el("span", { class: "k" }, k), el("span", { class: "v" }, v)));
-    add("表示名", rec.nickname);
-    if (rec.riotId) add("Riot ID", rec.riotId);
-    add("ランク", tierLabel + divLabel);
-    add("第一希望", labelOf(gameCfg.positions, rec.primaryPos));
-    if (rec.secondaryPos) add("第二希望", labelOf(gameCfg.positions, rec.secondaryPos));
+    const s = $("#summary"); s.className = "done-people"; s.innerHTML = "";
+    recs.forEach((rec, i) => {
+      const t = tierObj(rec.tier);
+      let dl = ""; if (t && !t.apex && rec.division) dl = " " + divLabel(rec.division);
+      s.append(el("div", { class: "done-person panel" },
+        el("div", { class: "dp-name" }, (recs.length > 1 ? (i + 1) + "人目： " : "") + rec.nickname),
+        line("ランク", labelOf(gameCfg.tiers, rec.tier) + dl),
+        line("第一希望", labelOf(gameCfg.positions, rec.primaryPos)),
+        rec.secondaryPos ? line("第二希望", labelOf(gameCfg.positions, rec.secondaryPos)) : null,
+      ));
+    });
     $("#done").classList.remove("hidden");
   }
 })();
