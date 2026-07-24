@@ -29,6 +29,12 @@
   $("#count").textContent = pub.count;
   if (!pub.open) { $("#closedBox").classList.remove("hidden"); return; }
 
+  if (pub.game === "lol") {
+    $("#addPerson").insertAdjacentElement("beforebegin",
+      el("p", { class: "muted", style: "font-size:12px;margin:0 2px 12px;line-height:1.5" },
+        "⚠ 複数人応募の制限：エメラルド以上は1グループに1人まで／ダイヤ以上と一緒に組めるのはゴールド以下まで"));
+  }
+
   const labelMap = pub.game === "lol" ? { "4": "IV", "3": "III", "2": "II", "1": "I" } : null;
   const divLabel = (d) => (labelMap ? labelMap[d] : d);
   const tierObj = (key) => gameCfg.tiers.find(x => x.key === key);
@@ -148,6 +154,12 @@
     }
     if (!members.length) return toast("表示名を入力してください", "err");
 
+    // グループ(2人以上)のランク制限チェック (LoLのみ)
+    if (members.length >= 2 && pub.game === "lol") {
+      const gerr = groupRankError(members.map(m => m.tier));
+      if (gerr) return toast(gerr, "err");
+    }
+
     const btn = $("#submitBtn");
     btn.disabled = true; btn.textContent = "送信中...";
     try {
@@ -172,6 +184,17 @@
     $("#form").classList.remove("hidden");
     $("#submitBtn").textContent = "更新する";
   });
+
+  function tierIndex(tier) { return gameCfg.tiers.findIndex(x => x.key === tier); }
+  function groupRankError(tiers) {
+    if (pub.game !== "lol") return null;
+    const idx = tiers.map(tierIndex);
+    if (idx.filter(r => r >= 5).length >= 2)
+      return "エメラルド以上は1グループに1人までです（2人以上は一緒に応募できません）";
+    if (idx.some(r => r >= 6) && idx.some(r => r >= 4 && r <= 5))
+      return "ダイヤ以上の人と一緒に応募できるのはゴールド以下までです";
+    return null;
+  }
 
   function labelOf(list, key) { const x = list.find(i => i.key === key); return x ? x.label : "—"; }
   function line(k, v) {

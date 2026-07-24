@@ -146,6 +146,29 @@ def entry_score(game, e):
     return player_score(game, e.get("tier"), e.get("division"))
 
 
+def _tier_index(game, tier):
+    order = [k for k, _l, _v in RANKS[game]["tiers"]]
+    try:
+        return order.index(tier)
+    except ValueError:
+        return -1
+
+
+def group_rank_error(game, tiers):
+    """複数人まとめて応募(グループ)のランク制限。NGなら日本語メッセージ、OKならNone。
+       ※LoLのみ適用 (index: GOLD=3, PLATINUM=4, EMERALD=5, DIAMOND=6)。
+       - エメラルド以上(>=5)は1グループに1人まで
+       - ダイヤ以上(>=6)が居る場合、他はゴールド以下(<=3)のみ"""
+    if game != "lol":
+        return None
+    idx = [_tier_index(game, t) for t in tiers]
+    if sum(1 for r in idx if r >= 5) >= 2:
+        return "エメラルド以上は1グループに1人までです（2人以上は一緒に応募できません）"
+    if any(r >= 6 for r in idx) and any(4 <= r <= 5 for r in idx):
+        return "ダイヤ以上の人と一緒に応募できるのはゴールド以下までです"
+    return None
+
+
 def decide_num_teams(n, tsize=5):
     """1チーム tsize 人固定。トーナメント用にチーム数を決める。
        40名以上 → 8チーム / 21名以上 → 4チーム / それ未満 → 作れるだけ。"""
@@ -857,6 +880,12 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(members, list):
                 members = [body]           # 後方互換 (単体エントリー)
             members = members[:3]          # 一度に最大3人
+            # グループ(2人以上)のランク制限チェック (LoLのみ)
+            valid = [m for m in members if (m.get("nickname") or "").strip()]
+            if len(valid) >= 2:
+                gerr = group_rank_error(ev["game"], [m.get("tier") for m in valid])
+                if gerr:
+                    return self._json({"error": gerr}, 400)
             out = []
             for m in members:
                 nickname = (m.get("nickname") or "").strip()
